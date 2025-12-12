@@ -1,0 +1,7 @@
+flask
+pandas
+redis
+sqlalchemy
+psycopg2-binary
+python-dotenv
+openpyxl
