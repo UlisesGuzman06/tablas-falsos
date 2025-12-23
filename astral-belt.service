@@ -1,0 +1,13 @@
+[Unit]
+Description=Gunicorn instance to serve Astral Belt
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/projects/astral-belt
+Environment="PATH=/home/ubuntu/projects/astral-belt/venv/bin"
+ExecStart=/home/ubuntu/projects/astral-belt/venv/bin/gunicorn --workers 4 --bind 127.0.0.1:5001 app:app
+
+[Install]
+WantedBy=multi-user.target

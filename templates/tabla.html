@@ -1,496 +1,1070 @@
 <!DOCTYPE html>
 <html lang="es" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Monitoreo de Errores - Tabla Resumen</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            900: '#1a1a1a',
-                            800: '#2d2d2d',
-                            700: '#404040',
-                        }
-                    }
-                }
-            }
-        }
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              dark: {
+                900: "#1a1a1a",
+                800: "#2d2d2d",
+                700: "#404040",
+              },
+            },
+          },
+        },
+      };
     </script>
     <style>
-        /* Custom scrollbar for table container */
-        .table-container::-webkit-scrollbar {
-            height: 8px;
-            width: 8px;
-        }
-        .table-container::-webkit-scrollbar-track {
-            background: #2d2d2d;
-        }
-        .table-container::-webkit-scrollbar-thumb {
-            background: #4b5563;
-            border-radius: 4px;
-        }
-        .table-container::-webkit-scrollbar-thumb:hover {
-            background: #6b7280;
-        }
+      /* Custom scrollbar for table container */
+      .table-container::-webkit-scrollbar {
+        height: 8px;
+        width: 8px;
+      }
+      .table-container::-webkit-scrollbar-track {
+        background: #2d2d2d;
+      }
+      .table-container::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 4px;
+      }
+      .table-container::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
+      }
     </style>
-</head>
-<body class="bg-gray-950 text-gray-100 font-sans antialiased min-h-screen">
-    
+  </head>
+  <body class="bg-gray-950 text-gray-100 font-sans antialiased min-h-screen">
     <div class="container mx-auto px-4 py-6 max-w-[95%]">
-        
-        <!-- Header -->
-        <header class="flex justify-between items-center mb-6">
-            <div>
-                <h1 class="text-2xl font-bold text-blue-400 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    Resumen Mensual de Fallos
-                </h1>
-                <p class="text-xs text-gray-500 mt-1">Última actualización: {{ ultima_actualizacion.strftime('%d/%m/%Y %H:%M:%S') }}</p>
-            </div>
-            <div class="flex gap-2">
-                <a href="/descargar_resumen" class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded shadow transition text-sm font-medium">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Descargar Excel
-                </a>
-                <a href="/" class="text-sm bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded border border-gray-700 transition flex items-center">Inicio</a>
-            </div>
-        </header>
-
-        {% if not tabla is none %}
-        <div class="bg-gray-900 rounded-lg shadow-2xl border border-gray-800 overflow-hidden">
-            <div class="table-container overflow-x-auto">
-                <table class="w-full text-sm text-gray-300">
-                    <thead class="bg-gray-800 text-gray-200 sticky top-0 z-10 shadow-sm">
-                        <tr>
-                            {% for header in headers %}
-                            <th scope="col" class="px-4 py-3 font-semibold tracking-wide border-b border-gray-700 text-center whitespace-nowrap min-w-[100px]">
-                                {{ header | safe }}
-                            </th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-800 bg-gray-900/50">
-                        {# TOTALS ROW #}
-                        {% if totals %}
-                        <tr class="bg-blue-900/20 border-b-2 border-blue-500/30 font-bold text-blue-100">
-                            {% for col_name in raw_columns %}
-                                {% set val = totals.get(col_name, '') %}
-                                {% set is_pct = "porcentaje" in col_name %}
-                                
-                                <td class="px-4 py-3 text-center whitespace-nowrap border-r border-blue-500/20
-                                    {% if col_name == 'dia' %} sticky left-0 z-10 bg-gray-900/90 text-blue-400 {% endif %}">
-                                    {% if col_name == 'dia' %}
-                                        TOTAL
-                                    {% elif is_pct %}
-                                        <span class="{% if val > 5 %} text-orange-400 {% elif val > 0 %} text-yellow-400 {% else %} text-green-400 {% endif %}">
-                                            {{ val }}%
-                                        </span>
-                                    {% else %}
-                                        {{ val }}
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-                        </tr>
-                        {% endif %}
-                        {# Iterate over pandas DataFrame rows #}
-                        {% for i, row in tabla.iterrows() %}
-                        {% set dia_val = row['dia'] %}
-                        <tr class="hover:bg-gray-800/60 transition-colors duration-150 group">
-                            {# Iterate over raw columns logic #}
-                            {% for col_name in raw_columns %}
-                                {% set val = row[col_name] %}
-                                
-                                {# Logic to style cells and make interactive if it is a numeric error count #}
-                                {% if col_name == "dia" %}
-                                    <td class="px-4 py-2 font-bold text-gray-400 bg-gray-800/30 text-center border-r border-gray-800 sticky left-0 z-10">
-                                        {{ val }}
-                                    </td>
-                                {% else %}
-                                    {# Determine type of column based on name suffix #}
-                                    {% set is_error = "_false" in col_name and "porcentaje" not in col_name %}
-                                    {% set is_pct = "porcentaje" in col_name %}
-                                    
-                                    <td class="px-4 py-2 text-center whitespace-nowrap border-r border-gray-800/50 relative
-                                        {% if is_error and val != 0 and val != "" %} cursor-pointer hover:bg-gray-700/50 text-red-400 font-medium {% endif %}"
-                                        {% if is_error and val != 0 and val != "" %} 
-                                            onclick="openDetails('{{ dia_val }}', '{{ col_name }}')"
-                                            title="Ver detalles"
-                                        {% endif %}
-                                    >
-                                        {% if val == "" %}
-                                            <span class="text-gray-700">-</span>
-                                        {% else %}
-                                            {% if is_pct %}
-                                                <span class="{% if val > 5 %} text-orange-400 {% elif val > 0 %} text-yellow-500 {% else %} text-green-500 {% endif %}">
-                                                    {{ val }}%
-                                                </span>
-                                            {% else %}
-                                                {{ val }}
-                                            {% endif %}
-                                        {% endif %}
-                                    </td>
-                                {% endif %}
-                            {% endfor %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+      <!-- Header -->
+      <header class="flex justify-between items-center mb-6">
+        <div>
+          <h1 class="text-2xl font-bold text-blue-400 flex items-center gap-2">
+            ACUMULADOS Y PROMEDIOS ANUALES MENSUALES - SOLICITUDES, FALSE Y
+            TASAS DE FALSE DIARIAS
+          </h1>
+          <p class="text-xs text-gray-500 mt-1">
+            Última actualización: {{ ultima_actualizacion.strftime('%d/%m/%Y
+            %H:%M:%S') }}
+          </p>
         </div>
-        {% else %}
-        <div class="p-10 text-center bg-gray-800 rounded-lg border border-gray-700">
-            <h2 class="text-xl text-yellow-400 mb-2">⚠ Sin Datos</h2>
-            <p class="text-gray-400">{{ mensaje }}</p>
+        <div class="flex gap-2">
+          <a
+            href="/descargar_resumen"
+            class="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded shadow transition text-sm font-medium"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-4 w-4 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            Descargar Excel
+          </a>
+        </div>
+      </header>
+
+      <!-- Summary Table Section -->
+      <div id="summary-table-section" class="relative min-h-[200px] mb-8">
+        <!-- Header for Summary Table -->
+        <div class="flex justify-between items-center mb-4 px-2">
+          <h2 class="text-xl font-bold text-gray-200 flex items-center gap-2">
+            <span
+              class="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20 text-blue-400"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+            </span>
+            Tabla Resumen
+          </h2>
+        </div>
+        {% if loading_table %}
+        <!-- Blur Overlay for Table -->
+        <div
+          id="table-loading-overlay"
+          class="absolute inset-0 z-20 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center rounded-lg border border-gray-800 transition-opacity duration-300"
+        >
+          <svg
+            class="animate-spin h-10 w-10 text-blue-500 mb-3"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          <p class="text-blue-400 font-medium animate-pulse">
+            Cargando tabla de los 3 meses...
+          </p>
         </div>
         {% endif %}
 
+        <div
+          id="table-content-container"
+          class="transition-opacity duration-300 {% if loading_table %}opacity-50{% endif %}"
+        >
+          {% include "components/summary_table.html" %}
+        </div>
+      </div>
     </div>
 
-    <!-- Chart Container -->
-    <div class="container mx-auto px-4 pb-12 max-w-[95%]">
-        <div class="bg-gray-900 p-6 rounded-lg shadow-2xl border border-gray-800">
-             <h2 class="text-xl font-bold text-gray-200 mb-4">Tendencia de Errores Mensuales</h2>
-             <div class="relative h-64 w-full">
-                <canvas id="errorChart"></canvas>
-             </div>
+    <!-- Annual Section (Grid Layout) -->
+    <div
+      class="container mx-auto px-4 pb-12 w-full max-w-full animate-fade-in-up"
+      style="animation-delay: 0.1s"
+    >
+      <!-- Grid Container -->
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- KPI Card (Left Column) -->
+        <div
+          class="bg-gradient-to-br from-gray-900 to-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl flex flex-col justify-center relative overflow-hidden group min-h-[200px] lg:min-h-full"
+        >
+          <!-- Decorative Background Element -->
+          <div
+            class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-colors duration-500"
+          ></div>
+
+          <div class="flex justify-between items-start mb-2 z-10">
+            <h3
+              class="text-gray-400 text-sm font-semibold uppercase tracking-wider"
+            >
+              Total Acumulado
+            </h3>
+          </div>
+
+          <div class="flex items-baseline gap-2 z-10">
+            <span
+              class="text-5xl font-extrabold text-white tracking-tighter"
+              id="annual-total"
+            >
+              {{ total_anual | format_number }}
+            </span>
+          </div>
+
+          <!-- Secondary Metrics -->
+          <div class="grid grid-cols-2 gap-4 mt-6 z-10 w-full px-1">
+            <div
+              class="bg-gray-800/50 p-2 rounded border border-gray-700/50 text-center"
+            >
+              <span
+                class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold"
+                >Promedio Mensual</span
+              >
+              <span
+                class="block text-lg font-bold text-gray-200"
+                id="monthly-average"
+              >
+                {{ promedio_mensual | format_number }}
+              </span>
+            </div>
+            <div
+              class="bg-gray-800/50 p-2 rounded border border-gray-700/50 text-center"
+            >
+              <span
+                class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold"
+                >Pico Máximo</span
+              >
+              <span
+                class="block text-sm font-bold text-blue-300 truncate"
+                id="max-month-label"
+              >
+                {{ mes_maximo.label }}
+              </span>
+              <span class="block text-xs text-gray-400" id="max-month-value">
+                {{ mes_maximo.total | format_number }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Timestamp hidden as requested -->
+          <div class="mt-4 pt-4 border-t border-gray-700/50 z-10 hidden">
+            <div class="flex items-center text-xs text-gray-400">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-4 w-4 mr-1 text-blue-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span id="update-timestamp"
+                >Actualizado: {{ ultima_actualizacion.strftime('%d/%m %H:%M:%S')
+                }}</span
+              >
+            </div>
+          </div>
         </div>
+
+        <!-- Chart Card (Right Column - Spans 3) -->
+        <div
+          class="lg:col-span-3 bg-gray-900 p-6 rounded-xl border border-gray-800 shadow-xl relative min-h-[400px]"
+          id="chart-section"
+        >
+          {% if loading_chart %}
+          <!-- Blur Overlay for Chart -->
+          <div
+            id="chart-loading-overlay"
+            class="absolute inset-0 z-20 bg-black/40 backdrop-blur-sm flex flex-col items-center justify-center rounded-xl transition-opacity duration-300"
+          >
+            <svg
+              class="animate-spin h-10 w-10 text-blue-500 mb-3"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <p class="text-blue-400 font-medium animate-pulse">
+              Cargando gráfico...
+            </p>
+          </div>
+          {% endif %}
+
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-gray-200 flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-5 w-5 text-blue-500"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              Tendencia Mensual
+            </h2>
+          </div>
+
+          <div
+            class="relative h-80 w-full {% if loading_chart %}opacity-50{% endif %}"
+            id="chart-canvas-container"
+          >
+            <canvas id="errorChart"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Month Details Modal (Table) -->
-    <div id="monthModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <!-- Overlay -->
-            <div class="fixed inset-0 bg-black bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeMonthModal()"></div>
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <div class="inline-block align-bottom bg-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-gray-700">
-                
-                <div class="bg-gray-800 px-4 py-3 sm:px-6 flex justify-between items-center border-b border-gray-700">
-                    <h3 class="text-lg leading-6 font-medium text-white" id="monthModalTitle">Detalle Mensual</h3>
-                    <button type="button" class="text-gray-400 hover:text-white" onclick="closeMonthModal()">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                
-                <div class="bg-gray-900 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 min-h-[200px]">
-                     <div id="monthLoading" class="text-center py-10 hidden">
-                        <svg class="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <p class="text-gray-400">Cargando datos del mes...</p>
-                    </div>
+    <div
+      id="monthModal"
+      class="fixed inset-0 z-50 hidden overflow-y-auto"
+      aria-labelledby="modal-title"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"
+      >
+        <!-- Overlay -->
+        <div
+          class="fixed inset-0 bg-black bg-opacity-75 transition-opacity"
+          aria-hidden="true"
+          onclick="closeMonthModal()"
+        ></div>
+        <span
+          class="hidden sm:inline-block sm:align-middle sm:h-screen"
+          aria-hidden="true"
+          >&#8203;</span
+        >
+        <div
+          class="inline-block align-bottom bg-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-gray-700"
+        >
+          <div
+            class="bg-gray-800 px-4 py-3 sm:px-6 flex justify-between items-center border-b border-gray-700"
+          >
+            <h3
+              class="text-lg leading-6 font-medium text-white"
+              id="monthModalTitle"
+            >
+              Detalle Mensual
+            </h3>
+            <button
+              type="button"
+              class="text-gray-400 hover:text-white"
+              onclick="closeMonthModal()"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
 
-                    <div id="monthContent" class="overflow-x-auto">
-                        <table class="w-full text-sm text-gray-300">
-                            <thead class="bg-gray-800 text-gray-200">
-                                <tr>
-                                    <th class="px-4 py-2 border-b border-gray-700 text-center">Día</th>
-                                    <th class="px-4 py-2 border-b border-gray-700 text-center">Total</th>
-                                    <th class="px-4 py-2 border-b border-gray-700 text-center text-red-400">Errores</th>
-                                    <th class="px-4 py-2 border-b border-gray-700 text-center">% Fallo</th>
-                                </tr>
-                            </thead>
-                            <tbody id="monthTableBody" class="divide-y divide-gray-800">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <div class="bg-gray-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-700">
-                    <button type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-200 hover:text-white hover:bg-gray-600 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm" onclick="closeMonthModal()">
-                        Cerrar
-                    </button>
-                </div>
+          <div class="bg-gray-900 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 min-h-[200px]">
+            <div id="monthLoading" class="text-center py-10 hidden">
+              <svg
+                class="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <p class="text-gray-400">Cargando datos del mes...</p>
             </div>
+
+            <div id="monthContent" class="overflow-x-auto">
+              <table class="w-full text-sm text-gray-300">
+                <thead class="bg-gray-800 text-gray-200">
+                  <tr>
+                    <th class="px-4 py-2 border-b border-gray-700 text-center">
+                      Día
+                    </th>
+                    <th class="px-4 py-2 border-b border-gray-700 text-center">
+                      Total
+                    </th>
+                    <th
+                      class="px-4 py-2 border-b border-gray-700 text-center text-red-400"
+                    >
+                      Errores
+                    </th>
+                    <th class="px-4 py-2 border-b border-gray-700 text-center">
+                      % Fallo
+                    </th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="monthTableBody"
+                  class="divide-y divide-gray-800"
+                ></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div
+            class="bg-gray-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-700"
+          >
+            <button
+              type="button"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-200 hover:text-white hover:bg-gray-600 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              onclick="closeMonthModal()"
+            >
+              Cerrar
+            </button>
+          </div>
         </div>
+      </div>
     </div>
-    <div id="detailsModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <!-- Overlay -->
-            <div class="fixed inset-0 bg-black bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeModal()"></div>
+    <div
+      id="detailsModal"
+      class="fixed inset-0 z-50 hidden overflow-y-auto"
+      aria-labelledby="modal-title"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"
+      >
+        <!-- Overlay -->
+        <div
+          class="fixed inset-0 bg-black bg-opacity-75 transition-opacity"
+          aria-hidden="true"
+          onclick="closeModal()"
+        ></div>
 
-            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+        <span
+          class="hidden sm:inline-block sm:align-middle sm:h-screen"
+          aria-hidden="true"
+          >&#8203;</span
+        >
 
-            <div class="inline-block align-bottom bg-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full border border-gray-700">
-                
-                <div class="bg-gray-800 px-4 py-3 sm:px-6 flex justify-between items-center border-b border-gray-700">
-                    <h3 class="text-lg leading-6 font-medium text-white" id="modal-title">Detalles de Errores</h3>
-                    <button type="button" class="text-gray-400 hover:text-white" onclick="closeModal()">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-                
-                <div class="bg-gray-900 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 min-h-[300px]">
-                    <div id="modalLoading" class="text-center py-10 hidden">
-                        <svg class="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <p class="text-gray-400">Cargando detalles...</p>
-                    </div>
+        <div
+          class="inline-block align-bottom bg-gray-900 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full border border-gray-700"
+        >
+          <div
+            class="bg-gray-800 px-4 py-3 sm:px-6 flex justify-between items-center border-b border-gray-700"
+          >
+            <h3
+              class="text-lg leading-6 font-medium text-white"
+              id="modal-title"
+            >
+              Detalles de Errores
+            </h3>
+            <button
+              type="button"
+              class="text-gray-400 hover:text-white"
+              onclick="closeModal()"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
 
-                    <div id="modalError" class="text-center py-10 hidden">
-                         <p class="text-red-400 font-bold" id="modalErrorText"></p>
-                    </div>
+          <div class="bg-gray-900 px-4 pt-5 pb-4 sm:p-6 sm:pb-4 min-h-[300px]">
+            <div id="modalLoading" class="text-center py-10 hidden">
+              <svg
+                class="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              <p class="text-gray-400">Cargando detalles...</p>
+            </div>
 
-                    <div id="modalContent" class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-700">
-                            <thead class="bg-gray-800">
-                                <tr>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Servicio Sistema</th>
-                                    <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Código Servicio</th>
-                                    <th scope="col" class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                                    <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Cantidad</th>
-                                </tr>
-                            </thead>
-                            <tbody id="detailsTableBody" class="bg-gray-900 divide-y divide-gray-800 text-sm">
-                                <!-- Filas dinámicas -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div id="modalError" class="text-center py-10 hidden">
+              <p class="text-red-400 font-bold" id="modalErrorText"></p>
+            </div>
 
-                <div class="bg-gray-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-700">
-                    <button type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-200 hover:text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm" onclick="closeModal()">
-                        Cerrar
-                    </button>
-                    <!-- <button type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+            <div id="modalContent" class="overflow-x-auto">
+              <table class="min-w-full divide-y divide-gray-700">
+                <thead class="bg-gray-800">
+                  <tr>
+                    <th
+                      scope="col"
+                      class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider"
+                    >
+                      Servicio Sistema
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider"
+                    >
+                      Código Servicio
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wider"
+                    >
+                      Status
+                    </th>
+                    <th
+                      scope="col"
+                      class="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider"
+                    >
+                      Cantidad
+                    </th>
+                  </tr>
+                </thead>
+                <tbody
+                  id="detailsTableBody"
+                  class="bg-gray-900 divide-y divide-gray-800 text-sm"
+                >
+                  <!-- Filas dinámicas -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div
+            class="bg-gray-800 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-700"
+          >
+            <button
+              type="button"
+              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-600 shadow-sm px-4 py-2 bg-gray-700 text-base font-medium text-gray-200 hover:text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              onclick="closeModal()"
+            >
+              Cerrar
+            </button>
+            <!-- <button type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
                         Exportar
                     </button> -->
-                </div>
-            </div>
+          </div>
         </div>
+      </div>
     </div>
 
+    <style>
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      .animate-fade-in-up {
+        animation: fadeInUp 0.6s ease-out forwards;
+      }
+    </style>
     <script id="chart-data-json" type="application/json">
-        {{ chart_data | tojson | safe }}
+      {{ chart_data | tojson | safe }}
+    </script>
+    <script id="monthly-details-json" type="application/json">
+      {{ monthly_details_preloaded | tojson | safe }}
     </script>
     <script>
-        // Chart Initialization
-        const chartData = JSON.parse(document.getElementById('chart-data-json').textContent);
-        
-        if (chartData && chartData.length > 0) {
-            const ctx = document.getElementById('errorChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: chartData.map(d => d.month),
-                    datasets: [
-                    {
-                        label: 'Total Transacciones',
-                        data: chartData.map(d => d.total),
-                        backgroundColor: 'rgba(59, 130, 246, 0.6)', // blue-500
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        borderWidth: 1
-                    },
-                    {
-                        label: 'Errores',
-                        data: chartData.map(d => d.errors),
-                        backgroundColor: 'rgba(239, 68, 68, 0.6)', // red-400
-                        borderColor: 'rgba(239, 68, 68, 1)',
-                        borderWidth: 1
-                    }]
+      // Check Loading Mode
+      const loadingTable = JSON.parse(
+        "{{ 'true' if loading_table else 'false' }}"
+      );
+      const loadingChart = JSON.parse(
+        "{{ 'true' if loading_chart else 'false' }}"
+      );
+
+      let chartInstance = null;
+      let monthlyDetailsPreloaded = JSON.parse(
+        document.getElementById("monthly-details-json").textContent || "{}"
+      );
+
+      // Functions for Polling
+      const POLLING_INTERVAL = 3000; // 3 seconds
+
+      async function pollSummaryTable() {
+        try {
+          const res = await fetch("/api/summary-table");
+          const data = await res.json();
+
+          if (data.status === "ready") {
+            // Update Table HTML
+            document.getElementById("table-content-container").innerHTML =
+              data.html;
+            document
+              .getElementById("table-content-container")
+              .classList.remove("opacity-50");
+
+            // Remove Overlay
+            const overlay = document.getElementById("table-loading-overlay");
+            if (overlay) overlay.remove();
+
+            return true; // Done
+          }
+        } catch (e) {
+          console.error("Error polling table:", e);
+        }
+        return false; // Keep polling
+      }
+
+      async function pollAnnualChart() {
+        try {
+          const res = await fetch("/api/annual-chart");
+          const data = await res.json();
+
+          if (data.status === "ready") {
+            // Initialize Chart
+            initChart(data.chart_data);
+
+            // Update Total with Animation
+            animateValue(
+              document.getElementById("annual-total"),
+              0,
+              data.total_anual,
+              1500
+            );
+
+            // Update Secondary Metrics
+            if (document.getElementById("monthly-average")) {
+              document.getElementById("monthly-average").innerText =
+                new Intl.NumberFormat("es-ES").format(data.promedio_mensual);
+            }
+            if (document.getElementById("max-month-label")) {
+              document.getElementById("max-month-label").innerText =
+                data.mes_maximo.label;
+              document.getElementById("max-month-value").innerText =
+                new Intl.NumberFormat("es-ES").format(data.mes_maximo.total);
+            }
+
+            // Update Timestamp
+            if (document.getElementById("update-timestamp")) {
+              document.getElementById("update-timestamp").innerText =
+                "Actualizado: " + data.ultima_actualizacion;
+            }
+
+            // Update Preloaded Data
+            monthlyDetailsPreloaded = data.monthly_details_preloaded || {};
+
+            // Remove Overlay & Opacity
+            document
+              .getElementById("chart-canvas-container")
+              .classList.remove("opacity-50");
+            const overlay = document.getElementById("chart-loading-overlay");
+            if (overlay) overlay.remove();
+
+            return true; // Done
+          }
+        } catch (e) {
+          console.error("Error polling chart:", e);
+        }
+        return false;
+      }
+
+      function startPolling() {
+        // Poll Table
+        if (loadingTable) {
+          const tableInterval = setInterval(async () => {
+            const done = await pollSummaryTable();
+            if (done) clearInterval(tableInterval);
+          }, POLLING_INTERVAL);
+        }
+
+        // Poll Chart
+        if (loadingChart) {
+          const chartInterval = setInterval(async () => {
+            const done = await pollAnnualChart();
+            if (done) clearInterval(chartInterval);
+          }, POLLING_INTERVAL);
+        }
+      }
+
+      function animateValue(obj, start, end, duration) {
+        if (!obj) return;
+        let startTimestamp = null;
+        const step = (timestamp) => {
+          if (!startTimestamp) startTimestamp = timestamp;
+          const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+          obj.innerHTML = new Intl.NumberFormat("es-ES").format(
+            Math.floor(progress * (end - start) + start)
+          );
+          if (progress < 1) {
+            window.requestAnimationFrame(step);
+          }
+        };
+        window.requestAnimationFrame(step);
+      }
+
+      // Init Chart Function
+      function initChart(data) {
+        if (!data || data.length === 0) return;
+
+        const ctx = document.getElementById("errorChart").getContext("2d");
+
+        if (chartInstance) {
+          chartInstance.destroy();
+        }
+
+        // Create Gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, "rgba(96, 165, 250, 0.9)"); // blue-400
+        gradient.addColorStop(1, "rgba(37, 99, 235, 0.4)"); // blue-600 low opacity
+
+        Chart.register(ChartDataLabels);
+        chartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: data.map((d) => d.month_label || d.month),
+            datasets: [
+              {
+                label: "Total Transacciones",
+                data: data.map((d) => d.total),
+                backgroundColor: gradient,
+                borderColor: "rgba(96, 165, 250, 1)",
+                borderWidth: 1,
+                borderRadius: 4, // Rounded corners on top
+                barPercentage: 0.6, // Slightly thinner bars
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            devicePixelRatio: window.devicePixelRatio || 2, // Force higher resolution
+            layout: {
+              padding: {
+                top: 25,
+              },
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              title: { display: false },
+              datalabels: {
+                color: "white",
+                font: {
+                  weight: "bold",
+                  size: 13,
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            labels: { color: '#9ca3af' } // gray-400
-                        },
-                        title: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: '#374151' }, // gray-700
-                            ticks: { color: '#9ca3af' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#9ca3af' }
-                        }
-                    },
-                    onClick: (e, activeElements) => {
-                        if (activeElements.length > 0) {
-                            const index = activeElements[0].index;
-                            const month = chartData[index].month;
-                            openMonthModal(month);
-                        }
+                anchor: "end",
+                align: "top",
+                offset: 4,
+                display: "auto",
+                formatter: function (value) {
+                  // Short notation for large numbers if needed or full
+                  // For now, full number with thousands separator
+                  // If value > 1M, we could use 1.2M ? User asked for numbers format specifically earlier.
+                  return new Intl.NumberFormat("es-ES").format(value);
+                },
+              },
+              tooltip: {
+                backgroundColor: "rgba(17, 24, 39, 0.9)",
+                titleColor: "#e5e7eb",
+                bodyColor: "#e5e7eb",
+                borderColor: "#374151",
+                borderWidth: 1,
+                callbacks: {
+                  label: function (context) {
+                    let label = context.dataset.label || "";
+                    if (label) label += ": ";
+                    if (context.parsed.y !== null) {
+                      label += new Intl.NumberFormat("es-ES").format(
+                        context.parsed.y
+                      );
                     }
-                }
-            });
-        }
-
-        // Month Modal Logic
-        function openMonthModal(month) {
-            const modal = document.getElementById('monthModal');
-            const loading = document.getElementById('monthLoading');
-            const content = document.getElementById('monthContent');
-            const tbody = document.getElementById('monthTableBody');
-            const title = document.getElementById('monthModalTitle');
-            
-            title.innerText = `Detalle Mensual: ${month}`;
-            modal.classList.remove('hidden');
-            loading.classList.remove('hidden');
-            content.classList.add('hidden');
-            tbody.innerHTML = '';
-
-            fetch('/datos_mes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mes: month })
-            })
-            .then(res => res.json())
-            .then(data => {
-                loading.classList.add('hidden');
-                content.classList.remove('hidden');
-                
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No hay datos para este mes</td></tr>';
-                    return;
-                }
-                
-                // Sort by day
-                data.sort((a, b) => a.dia - b.dia);
-                
-                data.forEach(row => {
-                    const tr = document.createElement('tr');
-                    tr.className = 'hover:bg-gray-800 transition border-b border-gray-800/50';
-                    tr.innerHTML = `
-                        <td class="px-4 py-2 text-center text-gray-400 font-bold">${row.dia}</td>
-                        <td class="px-4 py-2 text-center text-gray-300">${row.solicitudes}</td>
-                        <td class="px-4 py-2 text-center text-red-400 font-medium">${row.err}</td>
-                        <td class="px-4 py-2 text-center ${row.pct > 5 ? 'text-orange-400' : (row.pct > 0 ? 'text-yellow-400' : 'text-green-400')}">${row.pct}%</td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-            })
-            .catch(err => {
-                console.error(err);
-                loading.classList.add('hidden');
-                tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-red-500">Error cargando datos</td></tr>';
-                content.classList.remove('hidden');
-            });
-        }
-
-        function closeMonthModal() {
-            document.getElementById('monthModal').classList.add('hidden');
-        }
-
-        function openDetails(dia, columna) {
-            const modal = document.getElementById('detailsModal');
-            const loading = document.getElementById('modalLoading');
-            const content = document.getElementById('modalContent');
-            const errorDiv = document.getElementById('modalError');
-            const tbody = document.getElementById('detailsTableBody');
-
-            modal.classList.remove('hidden');
-            loading.classList.remove('hidden');
-            content.classList.add('hidden');
-            errorDiv.classList.add('hidden');
-            tbody.innerHTML = '';
-
-            fetch('/detalles', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+                    return label;
+                  },
                 },
-                body: JSON.stringify({ dia: dia, columna: columna }),
+              },
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: "#374151",
+                  borderDash: [2, 4],
+                }, // Dotted grid
+                ticks: {
+                  color: "#9ca3af",
+                  font: {
+                    size: 11,
+                  },
+                  callback: function (value) {
+                    // Abbreviate large numbers for axis
+                    if (value >= 1000000)
+                      return (value / 1000000).toFixed(1) + "M";
+                    if (value >= 1000) return (value / 1000).toFixed(0) + "k";
+                    return value;
+                  },
+                },
+              },
+              x: {
+                grid: { display: false },
+                ticks: {
+                  color: "#d1d5db", // gray-300
+                  font: {
+                    size: 12,
+                    weight: "500",
+                  },
+                },
+              },
+            },
+            onClick: (e, activeElements) => {
+              if (activeElements.length > 0) {
+                const index = activeElements[0].index;
+                const month = data[index].month;
+                const monthLabel = data[index].month_label || month;
+                openMonthModal(month, monthLabel);
+              }
+            },
+          },
+        });
+      }
+
+      // Initial Load Logic
+      if (loadingTable || loadingChart) {
+        startPolling();
+      }
+
+      // If NOT loading chart, init it immediately
+      if (!loadingChart) {
+        try {
+          const chartData = JSON.parse(
+            document.getElementById("chart-data-json").textContent
+          );
+          const totalAnualElement = document.getElementById("annual-total");
+          // If we have data, we can just show it or animate it from 0 too
+          // Let's animate it for consistency on first load
+          const totalValue =
+            parseInt(totalAnualElement.innerText.replace(/\./g, "")) || 0;
+          animateValue(totalAnualElement, 0, totalValue, 1500);
+
+          initChart(chartData);
+        } catch (e) {
+          console.log(
+            "No chart data available immediately or error animating."
+          );
+        }
+      }
+
+      // ... (Keep existing modal functions: renderMonthTable, openMonthModal, closeMonthModal, openDetails, closeModal, getStatusColor) ...
+
+      // Month Modal Logic
+      function renderMonthTable(data, tbody) {
+        if (data.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No hay datos para este mes</td></tr>';
+          return;
+        }
+        data.sort((a, b) => a.dia - b.dia);
+        data.forEach((row) => {
+          const tr = document.createElement("tr");
+          tr.className =
+            "hover:bg-gray-800 transition border-b border-gray-800/50";
+          tr.innerHTML = `
+                  <td class="px-4 py-2 text-center text-gray-400 font-bold">${
+                    row.dia
+                  }</td>
+                          <td class="px-4 py-2 text-center text-gray-300">${new Intl.NumberFormat(
+                            "es-ES"
+                          ).format(row.solicitudes)}</td>
+                  <td class="px-4 py-2 text-center text-red-400 font-medium">${new Intl.NumberFormat(
+                    "es-ES"
+                  ).format(row.err)}</td>
+                  <td class="px-4 py-2 text-center ${
+                    row.pct > 5
+                      ? "text-orange-400"
+                      : row.pct > 0
+                      ? "text-yellow-400"
+                      : "text-green-400"
+                  }">${row.pct}%</td>
+              `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      function openMonthModal(month, monthLabel) {
+        const modal = document.getElementById("monthModal");
+        const loading = document.getElementById("monthLoading");
+        const content = document.getElementById("monthContent");
+        const tbody = document.getElementById("monthTableBody");
+        const title = document.getElementById("monthModalTitle");
+
+        title.innerText = `Detalle Mensual: ${monthLabel || month}`;
+        modal.classList.remove("hidden");
+        tbody.innerHTML = "";
+
+        // 1. Check Preloaded Data
+        const preloaded = monthlyDetailsPreloaded[month];
+
+        if (preloaded) {
+          loading.classList.add("hidden");
+          content.classList.remove("hidden");
+          renderMonthTable(preloaded, tbody);
+        } else {
+          console.log(`Data for ${month} not preloaded, fetching...`);
+          loading.classList.remove("hidden");
+          content.classList.add("hidden");
+
+          fetch("/datos_mes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mes: month }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              loading.classList.add("hidden");
+              content.classList.remove("hidden");
+              renderMonthTable(data, tbody);
             })
-            .then(response => {
-                if (!response.ok) throw new Error("Error en la respuesta del servidor");
-                return response.json();
-            })
-            .then(data => {
-                loading.classList.add('hidden');
-                
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No se encontraron detalles</td></tr>';
-                } else {
-                    // Agrupar por statuscode
-                    const grouped = data.reduce((acc, row) => {
-                        const status = row.statuscode;
-                        if (!acc[status]) acc[status] = [];
-                        acc[status].push(row);
-                        return acc;
-                    }, {});
-
-                    // Ordenar keys (status codes)
-                    const statusCodes = Object.keys(grouped).sort((a, b) => parseInt(a) - parseInt(b));
-
-                    statusCodes.forEach(status => {
-                        const rows = grouped[status];
-                        const count = rows.reduce((sum, r) => sum + r.cantidad, 0);
-                        const statusColor = getStatusColor(status).split(' ')[1]; // Extract text color class roughly or hardcode
-                        
-                        // Header de grupo
-                        const headerTr = document.createElement('tr');
-                        headerTr.className = 'bg-gray-800 border-t border-gray-700';
-                        headerTr.innerHTML = `
-                            <td colspan="4" class="px-4 py-3 font-bold text-gray-200">
-                                <span class="flex items-center gap-2">
-                                    <span class="px-2 py-0.5 rounded text-xs ${getStatusColor(status)}">Status ${status}</span>
-                                    <span class="text-sm text-gray-400">(${count} errores)</span>
-                                </span>
-                            </td>
-                        `;
-                        tbody.appendChild(headerTr);
-
-                        // Filas del grupo
-                        rows.forEach(row => {
-                            const tr = document.createElement('tr');
-                            tr.className = 'hover:bg-gray-800 transition border-b border-gray-800/50';
-                            tr.innerHTML = `
-                                <td class="px-4 py-2 whitespace-nowrap text-gray-300 font-mono text-xs pl-8 border-l-2 border-transparent hover:border-blue-500/30">${row.servicesubsystemcode || '-'}</td>
-                                <td class="px-4 py-2 whitespace-nowrap text-blue-300 font-medium">${row.servicecode}</td>
-                                <td class="px-4 py-2 text-center text-gray-500 text-xs">${row.statuscode}</td>
-                                <td class="px-4 py-2 text-right text-gray-100 font-bold">${row.cantidad}</td>
-                            `;
-                            tbody.appendChild(tr);
-                        });
-                    });
-                }
-                content.classList.remove('hidden');
-            })
-            .catch(error => {
-                loading.classList.add('hidden');
-                errorDiv.classList.remove('hidden');
-                document.getElementById('modalErrorText').innerText = error.message;
+            .catch((err) => {
+              console.error(err);
+              loading.classList.add("hidden");
+              tbody.innerHTML =
+                '<tr><td colspan="4" class="px-4 py-4 text-center text-red-500">Error cargando datos</td></tr>';
+              content.classList.remove("hidden");
             });
         }
+      }
 
-        function closeModal() {
-            document.getElementById('detailsModal').classList.add('hidden');
-        }
+      function closeMonthModal() {
+        document.getElementById("monthModal").classList.add("hidden");
+      }
 
-        function getStatusColor(status) {
-            status = parseInt(status);
-            if (status >= 500) return 'bg-red-900 text-red-200';
-            if (status >= 400) return 'bg-yellow-900 text-yellow-200';
-            if (status >= 200 && status < 300) return 'bg-green-900 text-green-200';
-            return 'bg-gray-700 text-gray-300';
-        }
+      function openDetails(dia, columna) {
+        const modal = document.getElementById("detailsModal");
+        const loading = document.getElementById("modalLoading");
+        const content = document.getElementById("modalContent");
+        const errorDiv = document.getElementById("modalError");
+        const tbody = document.getElementById("detailsTableBody");
+
+        modal.classList.remove("hidden");
+        loading.classList.remove("hidden");
+        content.classList.add("hidden");
+        errorDiv.classList.add("hidden");
+        tbody.innerHTML = "";
+
+        fetch("/detalles", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ dia: dia, columna: columna }),
+        })
+          .then((response) => {
+            if (!response.ok)
+              throw new Error("Error en la respuesta del servidor");
+            return response.json();
+          })
+          .then((data) => {
+            loading.classList.add("hidden");
+
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            if (data.length === 0) {
+              tbody.innerHTML =
+                '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No se encontraron detalles</td></tr>';
+            } else {
+              const grouped = data.reduce((acc, row) => {
+                const status = row.statuscode;
+                if (!acc[status]) acc[status] = [];
+                acc[status].push(row);
+                return acc;
+              }, {});
+
+              const statusCodes = Object.keys(grouped).sort(
+                (a, b) => parseInt(a) - parseInt(b)
+              );
+
+              statusCodes.forEach((status) => {
+                const rows = grouped[status];
+                const count = rows.reduce((sum, r) => sum + r.cantidad, 0);
+
+                const headerTr = document.createElement("tr");
+                headerTr.className = "bg-gray-800 border-t border-gray-700";
+                headerTr.innerHTML = `
+                          <td colspan="4" class="px-4 py-3 font-bold text-gray-200">
+                              <span class="flex items-center gap-2">
+                                  <span class="px-2 py-0.5 rounded text-xs ${getStatusColor(
+                                    status
+                                  )}">Status ${status}</span>
+                                  <span class="text-sm text-gray-400">(${count} errores)</span>
+                              </span>
+                          </td>
+                      `;
+                tbody.appendChild(headerTr);
+
+                rows.forEach((row) => {
+                  const tr = document.createElement("tr");
+                  tr.className =
+                    "hover:bg-gray-800 transition border-b border-gray-800/50";
+                  tr.innerHTML = `
+                              <td class="px-4 py-2 whitespace-nowrap text-gray-300 font-mono text-xs pl-8 border-l-2 border-transparent hover:border-blue-500/30">${
+                                row.servicesubsystemcode || "-"
+                              }</td>
+                              <td class="px-4 py-2 whitespace-nowrap text-blue-300 font-medium">${
+                                row.servicecode
+                              }</td>
+                              <td class="px-4 py-2 text-center text-gray-500 text-xs">${
+                                row.statuscode
+                              }</td>
+                              <td class="px-4 py-2 text-right text-gray-100 font-bold">${new Intl.NumberFormat(
+                                "es-ES"
+                              ).format(row.cantidad)}</td>
+                          `;
+                  tbody.appendChild(tr);
+                });
+              });
+            }
+            content.classList.remove("hidden");
+          })
+          .catch((error) => {
+            loading.classList.add("hidden");
+            errorDiv.classList.remove("hidden");
+            document.getElementById("modalErrorText").innerText = error.message;
+          });
+      }
+
+      function closeModal() {
+        document.getElementById("detailsModal").classList.add("hidden");
+      }
+
+      function getStatusColor(status) {
+        status = parseInt(status);
+        if (status >= 500) return "bg-red-900 text-red-200";
+        if (status >= 400) return "bg-yellow-900 text-yellow-200";
+        if (status >= 200 && status < 300) return "bg-green-900 text-green-200";
+        return "bg-gray-700 text-gray-300";
+      }
     </script>
-</body>
+  </body>
 </html>

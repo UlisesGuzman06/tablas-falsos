@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sincronizando Datos - Gobierno de Mendoza</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+            },
+            colors: {
+              dark: {
+                900: "#111827", // gray-900
+                800: "#1f2937", // gray-800
+                700: "#374151", // gray-700
+              },
+              brand: {
+                blue: "#005696", // Color institucional sobrio
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans antialiased min-h-screen flex flex-col items-center justify-center p-4"
+  >
+    <!-- Card Principal -->
+    <div
+      class="max-w-3xl w-full bg-white dark:bg-gray-800 rounded shadow-md border border-gray-200 dark:border-gray-700 p-8"
+    >
+      <!-- Encabezado Institucional -->
+      <div
+        class="border-b border-gray-200 dark:border-gray-700 pb-6 mb-6 flex flex-col md:flex-row items-center md:items-start justify-between gap-4"
+      >
+        <div>
+          <h1
+            class="text-xl md:text-2xl font-semibold text-gray-800 dark:text-white tracking-tight"
+          >
+            Sistema de Monitoreo
+          </h1>
+          <p
+            class="text-sm text-gray-500 dark:text-gray-400 mt-1 uppercase tracking-wider font-medium"
+          >
+            Gobierno de Mendoza
+          </p>
+        </div>
+        <!-- Spinner Sobrio -->
+        <div
+          class="flex items-center gap-3 bg-blue-50 dark:bg-gray-700/50 px-4 py-2 rounded-full"
+        >
+          <div
+            class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700 dark:border-blue-400"
+          ></div>
+          <span class="text-sm font-medium text-blue-800 dark:text-blue-300"
+            >Procesando</span
+          >
+        </div>
+      </div>
+
+      <!-- Mensaje Principal -->
+      <div class="mb-8">
+        <h2 class="text-lg font-medium text-gray-700 dark:text-gray-200 mb-2">
+          Generando Reporte Histórico
+        </h2>
+        <p class="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
+          El sistema está consolidando la información de los últimos 12 meses.
+          Este proceso garantiza la integridad de los datos presentados en el
+          tablero de control. Por favor aguarde, la operación podría demorar
+          unos minutos.
+        </p>
+      </div>
+
+      <!-- Sección de Logs / Estado -->
+      <div class="w-full">
+        <div class="flex items-center justify-between mb-2">
+          <h3
+            class="text-xs font-semibold text-gray-500 uppercase tracking-wider"
+          >
+            Registro de Actividad
+          </h3>
+          <span id="timer" class="text-xs font-mono text-gray-400">00:00</span>
+        </div>
+
+        <div
+          class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded h-48 overflow-y-auto p-4 font-mono text-sm shadow-inner"
+        >
+          <div id="log-container" class="space-y-2">
+            <div class="text-gray-400 italic">Iniciando conexión segura...</div>
+            <!-- Los logs se insertarán aquí -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Simple -->
+    <div class="mt-8 text-center text-xs text-gray-400">
+      &copy; 2025 Gobierno de Mendoza &bull; Dirección de Informática
+    </div>
+
+    <script>
+      const logContainer = document.getElementById("log-container");
+      let pollingBadFails = 0;
+      let startTime = Date.now();
+
+      // Timer simple
+      setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const m = Math.floor(elapsed / 60)
+          .toString()
+          .padStart(2, "0");
+        const s = (elapsed % 60).toString().padStart(2, "0");
+        document.getElementById("timer").innerText = `${m}:${s}`;
+      }, 1000);
+
+      function appendLog(text) {
+        // Limpiar si es el placeholder
+        if (
+          logContainer.children.length === 1 &&
+          logContainer.children[0].classList.contains("italic")
+        ) {
+          logContainer.innerHTML = "";
+        }
+
+        const line = document.createElement("div");
+        line.className =
+          "flex items-start gap-2 text-gray-600 dark:text-gray-300 border-b border-gray-100 dark:border-gray-800 pb-1 last:border-0";
+
+        // Timestamp si no viene en el texto
+        const match = text.match(/^\[(.*?)\] (.*)/);
+        if (match) {
+          line.innerHTML = `
+                    <span class="text-xs text-blue-600 dark:text-blue-400 font-bold whitespace-nowrap">${match[1]}</span>
+                    <span>${match[2]}</span>
+                `;
+        } else {
+          line.innerText = text;
+        }
+
+        logContainer.appendChild(line);
+        logContainer.scrollTop = logContainer.scrollHeight;
+      }
+
+      async function checkStatus() {
+        try {
+          const response = await fetch("/status");
+          if (!response.ok) throw new Error("Status check failed");
+          const data = await response.json();
+
+          logContainer.innerHTML = ""; // Simple refresh
+          if (data.logs && data.logs.length > 0) {
+            data.logs.forEach((msg) => appendLog(msg));
+          } else {
+            logContainer.innerHTML =
+              '<div class="text-gray-400 italic">Esperando inicio del proceso...</div>';
+          }
+
+          if (!data.generating) {
+            // Finalizado
+            const line = document.createElement("div");
+            line.className =
+              "text-green-600 dark:text-green-400 font-bold mt-2";
+            line.innerText = "✓ Proceso finalizado. Redirigiendo...";
+            logContainer.appendChild(line);
+
+            // Reduced timeout and use replace to avoid back-history issues
+            setTimeout(() => {
+              window.location.replace("/tabla");
+            }, 500);
+          } else {
+            pollingBadFails = 0;
+            setTimeout(checkStatus, 2000);
+          }
+        } catch (e) {
+          console.error(e);
+          pollingBadFails++;
+          if (pollingBadFails < 5) {
+            setTimeout(checkStatus, 3000);
+          } else {
+            // Fallback redirect
+            window.location.replace("/tabla");
+          }
+        }
+      }
+
+      setTimeout(checkStatus, 1000);
+    </script>
+  </body>
+</html>

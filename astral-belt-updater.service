@@ -1,0 +1,16 @@
+[Unit]
+Description=Background Updater for Astral Belt
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/projects/astral-belt
+Environment="PATH=/home/ubuntu/projects/astral-belt/venv/bin"
+# Run as a service that restarts if it fails, or just runs the script
+# Since actualizar_periodicamente has a while True loop, simple execute is fine
+ExecStart=/home/ubuntu/projects/astral-belt/venv/bin/python actualizador.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

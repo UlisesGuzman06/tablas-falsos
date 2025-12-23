@@ -1,0 +1,90 @@
+{% if not tabla is none %}
+<div class="bg-gray-900 rounded-lg shadow-2xl border border-gray-800 overflow-hidden">
+    <div class="table-container overflow-x-auto">
+        <table class="w-full text-sm text-gray-300">
+            <thead class="bg-gray-800 text-gray-200 sticky top-0 z-10 shadow-sm">
+                <tr>
+                    {% for header in headers %}
+                    <th scope="col" class="px-3 py-2 font-semibold tracking-wide border-b border-gray-700 text-center whitespace-nowrap text-xs">
+                        {{ header | safe }}
+                    </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800 bg-gray-900/50">
+                {# TOTALS ROW #}
+                {% if totals %}
+                <tr class="bg-blue-900/20 border-b-2 border-blue-500/30 font-bold text-blue-100 text-xs">
+                    {% for col_name in raw_columns %}
+                        {% set val = totals.get(col_name, '') %}
+                        {% set is_pct = "porcentaje" in col_name %}
+                        
+                        <td class="px-3 py-2 text-center whitespace-nowrap border-r border-blue-500/20
+                            {% if col_name == 'dia' %} sticky left-0 z-10 bg-gray-900/90 text-blue-400 {% endif %}">
+                            {% if col_name == 'dia' %}
+                                TOTAL 
+                            {% elif is_pct %}
+                            <span class="{% if val > 5 %} text-orange-400 {% elif val > 0 %} text-yellow-400 {% else %} text-green-400 {% endif %}">
+                                    {{ val | round(2) }}% 
+                                    
+                                </span>
+                            {% else %}
+                                {{ val | format_number }}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endif %}
+                {# Iterate over pandas DataFrame rows #}
+                {% for i, row in tabla.iterrows() %}
+                {% set dia_val = row['dia'] %}
+                <tr class="hover:bg-gray-800/60 transition-colors duration-150 group text-xs">
+                    {# Iterate over raw columns logic #}
+                    {% for col_name in raw_columns %}
+                        {% set val = row[col_name] %}
+                        
+                        {# Logic to style cells and make interactive if it is a numeric error count #}
+                        {% if col_name == "dia" %}
+                            <td class="px-3 py-2 font-bold text-gray-400 bg-gray-800/30 text-center border-r border-gray-800 sticky left-0 z-10">
+                                {{ val }}
+                            </td>
+                        {% else %}
+                            {# Determine type of column based on name suffix #}
+                            {% set is_error = "_false" in col_name and "porcentaje" not in col_name %}
+                            {% set is_pct = "porcentaje" in col_name %}
+                            
+                            <td class="px-3 py-2 text-center whitespace-nowrap border-r border-gray-800/50 relative
+                                {% if is_error and val != 0 and val != "" %} cursor-pointer hover:bg-gray-700/50 text-red-400 font-medium {% endif %}"
+                                {% if is_error and val != 0 and val != "" %} 
+                                    onclick="openDetails('{{ dia_val }}', '{{ col_name }}')"
+                                    title="Ver detalles"
+                                    
+                                {% endif %}
+                            >
+                                {% if val == "" %}
+                                    <span class="text-gray-700">-</span>
+                                {% else %}
+                                    {% if is_pct %}
+                                        <span class="{% if val > 5 %} text-orange-400 {% elif val > 0 %} text-yellow-500 {% else %} text-green-500 {% endif %}">
+                                            {{ val | round(2) }}%
+                                            
+                                        </span>
+                                    {% else %}
+                                        {{ val | format_number }}
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="p-10 text-center bg-gray-800 rounded-lg border border-gray-700">
+    <h2 class="text-xl text-yellow-400 mb-2">⚠ Sin Datos</h2>
+    <p class="text-gray-400">{{ mensaje }}</p>
+</div>
+{% endif %}

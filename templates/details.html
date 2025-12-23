@@ -1,94 +1,145 @@
 <!DOCTYPE html>
 <html lang="es" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Detalles de Errores - {{ date }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 text-gray-100 font-sans antialiased min-h-screen">
+  </head>
+  <body class="bg-gray-900 text-gray-100 font-sans antialiased min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-6xl">
-        
-        <!-- Navigation -->
-        <div class="mb-8">
-            <a href="/" class="inline-flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors duration-200 border border-gray-700 group">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 transform group-hover:-translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                Volver al Resumen Diario
-            </a>
+      <!-- Navigation -->
+      <div class="mb-8">
+        <a
+          href="/"
+          class="inline-flex items-center px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors duration-200 border border-gray-700 group"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-5 w-5 mr-2 transform group-hover:-translate-x-1 transition-transform"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 19l-7-7m0 0l7-7m-7 7h18"
+            />
+          </svg>
+          Volver al Resumen Diario
+        </a>
+      </div>
+
+      <header class="mb-8 border-b border-gray-700 pb-6">
+        <h1 class="text-3xl font-bold text-white mb-2">
+          Detalle de Errores: <span class="text-blue-400">{{ date }}</span>
+        </h1>
+      </header>
+
+      <!-- Top 5 Summary Section -->
+      <section
+        class="mb-10 bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-lg"
+      >
+        <h2
+          class="text-xl font-semibold text-yellow-400 mb-4 flex items-center"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-6 w-6 mr-2"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          Resumen Principal (Top 5)
+        </h2>
+        <div
+          class="bg-gray-900 rounded p-4 font-mono text-sm text-gray-300 border border-gray-700"
+        >
+          <ul class="space-y-2">
+            {% for line in summary_lines %}
+            <li class="break-all">{{ line }}</li>
+            {% else %}
+            <li class="italic text-gray-500">
+              No hay errores significativos para mostrar.
+            </li>
+            {% endfor %}
+          </ul>
         </div>
+      </section>
 
-        <header class="mb-8 border-b border-gray-700 pb-6">
-            <h1 class="text-3xl font-bold text-white mb-2">Detalle de Errores: <span class="text-blue-400">{{ date }}</span></h1>
-        </header>
-
-        <!-- Top 5 Summary Section -->
-        <section class="mb-10 bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-lg">
-            <h2 class="text-xl font-semibold text-yellow-400 mb-4 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Resumen Principal (Top 5)
-            </h2>
-            <div class="bg-gray-900 rounded p-4 font-mono text-sm text-gray-300 border border-gray-700">
-                <ul class="space-y-2">
-                    {% for line in summary_lines %}
-                    <li class="break-all">{{ line }}</li>
-                    {% else %}
-                    <li class="italic text-gray-500">No hay errores significativos para mostrar.</li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </section>
-
-        <!-- Detailed Table -->
-        <section>
-            <h2 class="text-xl font-semibold text-white mb-4">Desglose Completo</h2>
-            <div class="overflow-hidden rounded-lg shadow-xl border border-gray-700">
-                <table class="w-full text-left text-sm text-gray-400">
-                    <thead class="bg-gray-800 text-xs uppercase text-gray-200">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 font-semibold tracking-wider">Servicio Completo</th>
-                            <th scope="col" class="px-6 py-3 font-semibold tracking-wider">Nombre del Servicio</th>
-                            <th scope="col" class="px-6 py-3 font-semibold tracking-wider text-center">Status Code</th>
-                            <th scope="col" class="px-6 py-3 font-semibold tracking-wider text-right">Total de Fallos</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700 bg-gray-900">
-                        {% for row in details %}
-                        <tr class="hover:bg-gray-800 transition-colors duration-200">
-                            <td class="px-6 py-4 font-medium text-white break-all">
-                                {{ row.serviciocompleto }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-blue-300">
-                                    {{ row.servicename }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-center">
-                                <span class="px-2 py-1 text-xs font-bold rounded 
-                                    {% if row.statuscode >= 500 %} bg-red-900 text-red-200
-                                    {% elif row.statuscode >= 400 %} bg-yellow-900 text-yellow-200
-                                    {% else %} bg-gray-700 text-gray-300 {% endif %}">
-                                    {{ row.statuscode }}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-right font-bold text-gray-200">
-                                {{ row.total_registros | format_number }}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="4" class="px-6 py-8 text-center text-gray-500">
-                                No se encontraron detalles para esta fecha.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
+      <!-- Detailed Table -->
+      <section>
+        <h2 class="text-xl font-semibold text-white mb-4">Desglose Completo</h2>
+        <div
+          class="overflow-hidden rounded-lg shadow-xl border border-gray-700"
+        >
+          <table class="w-full text-left text-sm text-gray-400">
+            <thead class="bg-gray-800 text-xs uppercase text-gray-200">
+              <tr>
+                <th scope="col" class="px-6 py-3 font-semibold tracking-wider">
+                  Servicio Completo
+                </th>
+                <th scope="col" class="px-6 py-3 font-semibold tracking-wider">
+                  Nombre del Servicio
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 font-semibold tracking-wider text-center"
+                >
+                  Código de Estado
+                </th>
+                <th
+                  scope="col"
+                  class="px-6 py-3 font-semibold tracking-wider text-right"
+                >
+                  Total de Fallos
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700 bg-gray-900">
+              {% for row in details %}
+              <tr class="hover:bg-gray-800 transition-colors duration-200">
+                <td class="px-6 py-4 font-medium text-white break-all">
+                  {{ row.serviciocompleto }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span
+                    class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-blue-300"
+                  >
+                    {{ row.servicename }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-center">
+                  <span
+                    class="px-2 py-1 text-xs font-bold rounded {% if row.statuscode >= 500 %} bg-red-900 text-red-200 {% elif row.statuscode >= 400 %} bg-yellow-900 text-yellow-200 {% else %} bg-gray-700 text-gray-300 {% endif %}"
+                  >
+                    {{ row.statuscode }}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-right font-bold text-gray-200">
+                  {{ row.total_registros | format_number }}
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                  No se encontraron detalles para esta fecha.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
-</body>
+  </body>
 </html>
