@@ -51,11 +51,14 @@
                         {% else %}
                             {# Determine type of column based on name suffix #}
                             {% set is_error = "_false" in col_name and "porcentaje" not in col_name %}
+                            {# NEW: Check if it is the total column #}
+                            {% set is_total = "_solicitudes" in col_name %}
                             {% set is_pct = "porcentaje" in col_name %}
                             
                             <td class="px-3 py-2 text-center whitespace-nowrap border-r border-gray-800/50 relative
-                                {% if is_error and val != 0 and val != "" %} cursor-pointer hover:bg-gray-700/50 text-red-400 font-medium {% endif %}"
-                                {% if is_error and val != 0 and val != "" %} 
+                                {% if (is_error or is_total) and val != 0 and val != "" %} cursor-pointer hover:bg-gray-700/50 {% endif %}
+                                {% if is_error and val != 0 and val != "" %} text-red-400 font-medium {% endif %}"
+                                {% if (is_error or is_total) and val != 0 and val != "" %} 
                                     onclick="openDetails('{{ dia_val }}', '{{ col_name }}')"
                                     title="Ver detalles"
                                     

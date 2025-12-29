@@ -38,7 +38,7 @@ DB_URI = f"postgresql+psycopg2://{PG_USER}:{PG_PASS}@{PG_HOST}:{PG_PORT}/{PG_DB}
 
 # V4: Restored key to clean state after reverts
 # V4: Restored key to clean state after reverts
-REDIS_KEY = "monitoring:resumen_diario_restored_v4"
+REDIS_KEY = "monitoring:resumen_diario_restored_v5"
 
 CACHE_SHORT_SECONDS = 8 * 60 * 60          # 8 Hours
 CACHE_LONG_SECONDS = 14 * 24 * 60 * 60     # 14 Days
@@ -64,6 +64,7 @@ def log_progress(message):
 
 # Global State for Async Generation (Restored)
 IS_GENERATING_CHART = False # New Lock for Chart
+GENERATING_DETAILS_MONTHS = {} # Track active details generation per month {month_key: bool}
 GENERATION_LOGS = []
 
 def log_progress(message):
@@ -154,9 +155,15 @@ def generar_tabla_resumen():
                 EXTRACT(DAY FROM requestindatetime)::int AS dia,
                 TO_CHAR(requestindatetime, 'Mon-YY')    AS mes,
                 COUNT(*)                                AS solicitudes,
-                SUM(CASE WHEN succeeded = false THEN 1 ELSE 0 END) AS false,
+                SUM(CASE 
+                    WHEN succeeded = false 
+                    AND (statuscode IS NULL OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499))
+                    THEN 1 ELSE 0 END) AS false,
                 ROUND(
-                    SUM(CASE WHEN succeeded = false THEN 1 ELSE 0 END)::numeric
+                    SUM(CASE 
+                        WHEN succeeded = false 
+                        AND (statuscode IS NULL OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499))
+                        THEN 1 ELSE 0 END)::numeric
                     / COUNT(*) * 100,
                     2
                 )                                       AS porcentaje_false
@@ -176,9 +183,15 @@ def generar_tabla_resumen():
                 EXTRACT(DAY FROM requestindatetime)::int AS dia,
                 TO_CHAR(requestindatetime, 'Mon-YY')    AS mes,
                 COUNT(*)                                AS solicitudes,
-                SUM(CASE WHEN succeeded = false THEN 1 ELSE 0 END) AS false,
+                SUM(CASE 
+                    WHEN succeeded = false 
+                    AND (statuscode IS NULL OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499))
+                    THEN 1 ELSE 0 END) AS false,
                 ROUND(
-                    SUM(CASE WHEN succeeded = false THEN 1 ELSE 0 END)::numeric
+                    SUM(CASE 
+                        WHEN succeeded = false 
+                        AND (statuscode IS NULL OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499))
+                        THEN 1 ELSE 0 END)::numeric
                     / COUNT(*) * 100,
                     2
                 )                                       AS porcentaje_false
@@ -366,8 +379,7 @@ def _generar_detalles_bg():
                     WHEN succeeded = false 
                     AND (
                     statuscode IS NULL 
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) < 200)
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) >= 300)
+                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499)
                     )
                 THEN 1 ELSE 0 
                 END) AS err
@@ -390,8 +402,7 @@ def _generar_detalles_bg():
                     WHEN succeeded = false 
                     AND (
                     statuscode IS NULL 
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) < 200)
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) >= 300)
+                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499)
                     )
                 THEN 1 ELSE 0 
                 END) AS err
@@ -495,8 +506,7 @@ def _generar_grafico_anual_bg():
                         WHEN succeeded = false 
                         AND (
                             statuscode IS NULL 
-                            OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) < 200)
-                            OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) >= 300)
+                            OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499)
                         )
                         THEN 1 
                         ELSE 0 
@@ -936,8 +946,7 @@ def datos_mes():
             WHEN succeeded = false 
                  AND (
                     statuscode IS NULL 
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) < 200)
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) >= 300)
+                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) > 499)
                  )
             THEN 1 ELSE 0 
         END) AS err
@@ -981,51 +990,53 @@ def datos_mes():
         return jsonify({"error": str(e)}), 500
 
 # ============================================================
-# 🔍 DETALLES (Mensuales Caché)
+# 🔍 DETALLES (Mensuales Caché) - ASYNC UPDATE
 # ============================================================
 
-@app.route("/detalles", methods=["POST"])
-def obtener_detalles():
-    data = request.get_json()
-    print(f"DEBUG: /detalles payload: {data}")
-    if not data:
-        print("DEBUG: No JSON received")
-        return jsonify({"error": "Invalid JSON"}), 400
-        
-    dia = data.get("dia")
-    columna = data.get("columna", "") 
-    print(f"DEBUG: dia={dia}, columna={columna}") 
+def _generar_detalle_mes_bg(mes_sql, mode='error'):
+    """Worker para generar detalles de un mes específico en background. mode='error'|'success'"""
+    global GENERATING_DETAILS_MONTHS
+    # Unique key for tracking generation
+    gen_key = f"{mes_sql}:{mode}"
     
-    # ... (Rest of existing logic for /detalles) -> UNCHANGED
+    print(f"[{datetime.now()}] ⚙️ Iniciando generación background de detalles ({mode}) para {mes_sql}...")
+    
     try:
         engine = get_engine()
-        if not engine:
-             return jsonify({"error": "Sin conexión a DB"}), 500
+        if not engine: return
 
-        try:
-            mes_año_part = columna.split("_")[0] # "Jan-25"
-        except:
-            return jsonify({"error": "No se pudo determinar el mes."}), 400
-
-        mes_sql = mes_año_part
-        cache_key = f"monitoring:detalles:mes:{mes_sql}"
-
-        df_mes = pd.DataFrame()
-        
+        # Cache key differentiation
+        if mode == 'success':
+            cache_key = f"monitoring:detalles:mes:{mes_sql}:success_v2"
+        else:
+            cache_key = f"monitoring:detalles:mes:{mes_sql}"
+            
         r = get_redis()
 
-        # 1. Intentar leer de Redis
-        if r and r.exists(cache_key):
-            try:
-                df_mes = pd.read_json(io.StringIO(r.get(cache_key)), orient="records")
-            except:
-                pass
+        # Build Query based on mode
+        if mode == 'success':
+            # DETAILS FOR SUCCESSFUL TRANSACTIONS (Strictly 200-299)
+            where_clause = f"""
+                TO_CHAR(requestindatetime, 'Mon-YY') = '{mes_sql}'
+                AND (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) BETWEEN 200 AND 299)
+            """
+        else:
+            # DETAILS FOR ERRORS (>499 or NULL) - Matches new logic? 
+            # WAIT: The user said "adentro si se sigan manteniendo como esta ahora" for the Details View.
+            # So the DETAILS VIEW for errors should still show ALL errors (including 400s).
+            # The summary table logic change was ONLY for the counts in the main table.
+            # So we keep the OLD logic for errors here.
+            where_clause = f"""
+                TO_CHAR(requestindatetime, 'Mon-YY') = '{mes_sql}'
+                AND succeeded = false
+                AND (
+                    statuscode IS NULL 
+                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) < 200)
+                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) >= 300)
+                )
+            """
 
-        # 2. Si no hay cache, consultar SQL
-        if df_mes.empty:
-            # Note: Keeping the filter for details strictly (300-599) as that seems to be desired for the details view specifically
-            # usually 300+ are 'interesting' codes.
-            query = f"""
+        query = f"""
             SELECT 
                 EXTRACT(DAY FROM requestindatetime)::int AS dia,
                 servicesubsystemcode,
@@ -1034,13 +1045,7 @@ def obtener_detalles():
                 COUNT(*) AS cantidad
             FROM public.tablaxroadmonitoreo
             WHERE 
-                TO_CHAR(requestindatetime, 'Mon-YY') = '{mes_sql}'
-                AND succeeded = false
-                AND (
-                    statuscode IS NULL 
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) < 200)
-                    OR (statuscode ~ '^[0-9]+$' AND cast(statuscode as integer) >= 300)
-                )
+                {where_clause}
                 AND serviceCode NOT IN (
                     'clientReg',
                     'getSecurityServerOperationalData',
@@ -1055,24 +1060,81 @@ def obtener_detalles():
             GROUP BY 1, servicesubsystemcode, servicecode, statuscode
             ORDER BY statuscode ASC, cantidad DESC;
             """
-            try:
-                df_mes = pd.read_sql(query, engine)
-                if r and not df_mes.empty:
-                    r.set(cache_key, df_mes.to_json(orient="records", force_ascii=False), ex=CACHE_SHORT_SECONDS)
-            except Exception as e:
-                return jsonify({"error": str(e)}), 500
-
-        # 3. Filtrar en memoria
-        if not df_mes.empty:
-            df_dia = df_mes[df_mes['dia'] == int(dia)].copy()
-            df_dia = df_dia.sort_values(by=["statuscode", "cantidad"], ascending=[True, False])
-            return df_dia.to_json(orient="records", force_ascii=False)
         
-        return "[]"
+        try:
+            df_mes = pd.read_sql(query, engine)
+            # Guardar siempre, aunque esté vacío, para marcar que ya se procesó
+            json_res = df_mes.to_json(orient="records", force_ascii=False) if not df_mes.empty else "[]"
+            
+            if r:
+                r.set(cache_key, json_res, ex=CACHE_SHORT_SECONDS)
+                print(f"[{datetime.now()}] 💾 Detalles ({mode}) mes {mes_sql} guardados en Redis.")
+                
+        except Exception as e:
+            print(f"❌ Error SQL detalle ({mode}) mes {mes_sql}: {e}")
+
     except Exception as e:
-        print(f"CRITICAL ERROR in /detalles: {e}")
-        traceback.print_exc()
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        print(f"❌ Error worker detalle ({mode}) mes {mes_sql}: {e}")
+    finally:
+        # Liberar lock specific to this mode
+        if gen_key in GENERATING_DETAILS_MONTHS:
+            del GENERATING_DETAILS_MONTHS[gen_key]
+
+@app.route("/detalles", methods=["POST"])
+def obtener_detalles():
+    data = request.get_json()
+    # print(f"DEBUG: /detalles payload: {data}")
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+        
+    dia = data.get("dia")
+    columna = data.get("columna", "") 
+    
+    try:
+        mes_año_part = columna.split("_")[0] # "Jan-25"
+    except:
+        return jsonify({"error": "No se pudo determinar el mes."}), 400
+
+    mes_sql = mes_año_part
+    
+    # Determine mode based on column name
+    # If it is "_solicitudes", we want success details
+    mode = 'success' if '_solicitudes' in columna else 'error'
+    
+    if mode == 'success':
+        cache_key = f"monitoring:detalles:mes:{mes_sql}:success_v2"
+        gen_key = f"{mes_sql}:success"
+    else:
+        cache_key = f"monitoring:detalles:mes:{mes_sql}"
+        gen_key = f"{mes_sql}:error" # Use differentiated key for lock too
+
+    r = get_redis()
+
+    # 1. Intentar leer de Redis DIRECTAMENTE
+    if r and r.exists(cache_key):
+        try:
+            content = r.get(cache_key)
+            if content:
+                df_mes = pd.read_json(io.StringIO(content), orient="records")
+                
+                # Filtrar en memoria por día
+                if not df_mes.empty:
+                    df_dia = df_mes[df_mes['dia'] == int(dia)].copy()
+                    df_dia = df_dia.sort_values(by=["statuscode", "cantidad"], ascending=[True, False])
+                    return df_dia.to_json(orient="records", force_ascii=False)
+                return "[]"
+        except Exception as e:
+            print(f"Error reading details cache: {e}")
+
+    # 2. Si no está en cache, verificar si ya se está generando
+    if gen_key in GENERATING_DETAILS_MONTHS:
+        return jsonify({"status": "loading", "message": "Generando datos..."}), 202
+
+    # 3. Si no se está generando, lanzar background job
+    GENERATING_DETAILS_MONTHS[gen_key] = True
+    threading.Thread(target=_generar_detalle_mes_bg, args=(mes_sql, mode)).start()
+    
+    return jsonify({"status": "loading", "message": "Iniciando generación..."}), 202
 
 if __name__ == "__main__":
     # Disable default Flask/Werkzeug request logging (too noisy with polling)

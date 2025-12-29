@@ -292,7 +292,7 @@
                   d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                 />
               </svg>
-              Tendencia Mensual
+              Transacciones Mensuales
             </h2>
           </div>
 
@@ -506,7 +506,10 @@
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 ></path>
               </svg>
-              <p class="text-gray-400">Cargando detalles...</p>
+              <p class="text-blue-400 font-medium mb-2">Cargando detalles...</p>
+              <p id="detailsTimer" class="text-xs text-gray-500 font-mono">
+                Tiempo transcurrido: 0s
+              </p>
             </div>
 
             <div id="modalError" class="text-center py-10 hidden">
@@ -958,6 +961,31 @@
         document.getElementById("monthModal").classList.add("hidden");
       }
 
+      let detailsTimerInterval = null;
+      let detailsStartTime = null;
+
+      function startDetailsTimer() {
+        const timerElement = document.getElementById("detailsTimer");
+        if (!timerElement) return;
+
+        detailsStartTime = Date.now();
+        timerElement.innerText = "Tiempo transcurrido: 0s";
+
+        if (detailsTimerInterval) clearInterval(detailsTimerInterval);
+
+        detailsTimerInterval = setInterval(() => {
+          const seconds = Math.floor((Date.now() - detailsStartTime) / 1000);
+          timerElement.innerText = `Tiempo transcurrido: ${seconds}s`;
+        }, 1000);
+      }
+
+      function stopDetailsTimer() {
+        if (detailsTimerInterval) {
+          clearInterval(detailsTimerInterval);
+          detailsTimerInterval = null;
+        }
+      }
+
       function openDetails(dia, columna) {
         const modal = document.getElementById("detailsModal");
         const loading = document.getElementById("modalLoading");
@@ -971,87 +999,110 @@
         errorDiv.classList.add("hidden");
         tbody.innerHTML = "";
 
-        fetch("/detalles", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ dia: dia, columna: columna }),
-        })
-          .then((response) => {
-            if (!response.ok)
-              throw new Error("Error en la respuesta del servidor");
-            return response.json();
+        // Start Timer
+        startDetailsTimer();
+
+        // Polling Function
+        const pollDetails = () => {
+          fetch("/detalles", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ dia: dia, columna: columna }),
           })
-          .then((data) => {
-            loading.classList.add("hidden");
+            .then((response) => {
+              // If 202, it means loading
+              if (response.status === 202) {
+                return { status: "loading" };
+              }
+              if (!response.ok)
+                throw new Error("Error en la respuesta del servidor");
+              return response.json();
+            })
+            .then((data) => {
+              if (data.status === "loading") {
+                // Retry after 2 seconds
+                setTimeout(pollDetails, 2000);
+                return;
+              }
 
-            if (data.error) {
-              throw new Error(data.error);
-            }
+              // Done loading
+              stopDetailsTimer();
+              loading.classList.add("hidden");
 
-            if (data.length === 0) {
-              tbody.innerHTML =
-                '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No se encontraron detalles</td></tr>';
-            } else {
-              const grouped = data.reduce((acc, row) => {
-                const status = row.statuscode;
-                if (!acc[status]) acc[status] = [];
-                acc[status].push(row);
-                return acc;
-              }, {});
+              if (data.error) {
+                throw new Error(data.error);
+              }
 
-              const statusCodes = Object.keys(grouped).sort(
-                (a, b) => parseInt(a) - parseInt(b)
-              );
+              if (data.length === 0) {
+                tbody.innerHTML =
+                  '<tr><td colspan="4" class="px-4 py-4 text-center text-gray-500">No se encontraron detalles</td></tr>';
+              } else {
+                const grouped = data.reduce((acc, row) => {
+                  const status = row.statuscode;
+                  if (!acc[status]) acc[status] = [];
+                  acc[status].push(row);
+                  return acc;
+                }, {});
 
-              statusCodes.forEach((status) => {
-                const rows = grouped[status];
-                const count = rows.reduce((sum, r) => sum + r.cantidad, 0);
+                const statusCodes = Object.keys(grouped).sort(
+                  (a, b) => parseInt(a) - parseInt(b)
+                );
 
-                const headerTr = document.createElement("tr");
-                headerTr.className = "bg-gray-800 border-t border-gray-700";
-                headerTr.innerHTML = `
-                          <td colspan="4" class="px-4 py-3 font-bold text-gray-200">
-                              <span class="flex items-center gap-2">
-                                  <span class="px-2 py-0.5 rounded text-xs ${getStatusColor(
-                                    status
-                                  )}">Status ${status}</span>
-                                  <span class="text-sm text-gray-400">(${count} errores)</span>
-                              </span>
-                          </td>
-                      `;
-                tbody.appendChild(headerTr);
+                statusCodes.forEach((status) => {
+                  const rows = grouped[status];
+                  const count = rows.reduce((sum, r) => sum + r.cantidad, 0);
 
-                rows.forEach((row) => {
-                  const tr = document.createElement("tr");
-                  tr.className =
-                    "hover:bg-gray-800 transition border-b border-gray-800/50";
-                  tr.innerHTML = `
-                              <td class="px-4 py-2 whitespace-nowrap text-gray-300 font-mono text-xs pl-8 border-l-2 border-transparent hover:border-blue-500/30">${
-                                row.servicesubsystemcode || "-"
-                              }</td>
-                              <td class="px-4 py-2 whitespace-nowrap text-blue-300 font-medium">${
-                                row.servicecode
-                              }</td>
-                              <td class="px-4 py-2 text-center text-gray-500 text-xs">${
-                                row.statuscode
-                              }</td>
-                              <td class="px-4 py-2 text-right text-gray-100 font-bold">${new Intl.NumberFormat(
-                                "es-ES"
-                              ).format(row.cantidad)}</td>
+                  const headerTr = document.createElement("tr");
+                  headerTr.className = "bg-gray-800 border-t border-gray-700";
+                  headerTr.innerHTML = `
+                              <td colspan="4" class="px-4 py-3 font-bold text-gray-200">
+                                  <span class="flex items-center gap-2">
+                                      <span class="px-2 py-0.5 rounded text-xs ${getStatusColor(
+                                        status
+                                      )}">Status ${status}</span>
+                                      <span class="text-sm text-gray-400">(${count} casos)</span>
+                                  </span>
+                              </td>
                           `;
-                  tbody.appendChild(tr);
+                  tbody.appendChild(headerTr);
+
+                  rows.forEach((row) => {
+                    const tr = document.createElement("tr");
+                    tr.className =
+                      "hover:bg-gray-800 transition border-b border-gray-800/50";
+                    tr.innerHTML = `
+                                  <td class="px-4 py-2 whitespace-nowrap text-gray-300 font-mono text-xs pl-8 border-l-2 border-transparent hover:border-blue-500/30">${
+                                    row.servicesubsystemcode || "-"
+                                  }</td>
+                                  <td class="px-4 py-2 whitespace-nowrap text-blue-300 font-medium">${
+                                    row.servicecode
+                                  }</td>
+                                  <td class="px-4 py-2 text-center text-gray-500 text-xs">${
+                                    row.statuscode
+                                  }</td>
+                                  <td class="px-4 py-2 text-right text-gray-100 font-bold">${new Intl.NumberFormat(
+                                    "es-ES"
+                                  ).format(row.cantidad)}</td>
+                              `;
+                    tbody.appendChild(tr);
+                  });
                 });
-              });
-            }
-            content.classList.remove("hidden");
-          })
-          .catch((error) => {
-            loading.classList.add("hidden");
-            errorDiv.classList.remove("hidden");
-            document.getElementById("modalErrorText").innerText = error.message;
-          });
+              }
+              content.classList.remove("hidden");
+            })
+            .catch((error) => {
+              stopDetailsTimer();
+              loading.classList.add("hidden");
+              errorDiv.classList.remove("hidden");
+              document.getElementById("modalErrorText").innerText =
+                error.message;
+            });
+        };
+
+        // Start polling
+        pollDetails();
       }
 
       function closeModal() {
