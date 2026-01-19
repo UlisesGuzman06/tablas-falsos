@@ -166,17 +166,35 @@
             <h3
               class="text-gray-400 text-sm font-semibold uppercase tracking-wider"
             >
-              Total Acumulado
+              Total 2026
             </h3>
           </div>
 
           <div class="flex items-baseline gap-2 z-10">
             <span
               class="text-5xl font-extrabold text-white tracking-tighter"
-              id="annual-total"
+              id="total-2026"
             >
-              {{ total_anual | format_number }}
+              {{ total_2026 | format_number }}
             </span>
+          </div>
+
+          <!-- Total 2025 Small Box -->
+          <div class="mt-4 mb-2 z-10">
+            <div
+              class="bg-gray-800/80 p-2 rounded-lg border border-gray-700/50 inline-block min-w-[120px]"
+            >
+              <span
+                class="block text-[10px] text-gray-500 uppercase tracking-wider font-bold"
+                >Total 2025</span
+              >
+              <span
+                class="block text-xl font-bold text-gray-300"
+                id="total-2025"
+              >
+                {{ total_2025 | format_number }}
+              </span>
+            </div>
           </div>
 
           <!-- Secondary Metrics -->
@@ -294,6 +312,10 @@
               </svg>
               Transacciones Mensuales
             </h2>
+            <!-- Year Selector Removed -->
+            <div
+              class="flex gap-2 items-center bg-gray-900 rounded-lg p-1 border border-gray-700 hidden"
+            ></div>
           </div>
 
           <div
@@ -603,6 +625,128 @@
       const loadingChart = JSON.parse(
         "{{ 'true' if loading_chart else 'false' }}"
       );
+      const initialYear = "{{ selected_year }}";
+      let currentYear = initialYear;
+
+      // Update Button States on Load
+      document.addEventListener("DOMContentLoaded", () => {
+        updateYearButtons(currentYear);
+
+        // Initial Chart Init using preloaded data if available
+        const chartDataScript = document.getElementById("chart-data-json");
+        if (chartDataScript) {
+          try {
+            const initialChartData = JSON.parse(chartDataScript.textContent);
+            if (initialChartData && initialChartData.length > 0) {
+              initChart(initialChartData);
+            }
+          } catch (e) {
+            console.error("Error parsing initial chart data", e);
+          }
+        }
+
+        // Initial table filter
+        setTimeout(() => filterTableByYear(currentYear), 100);
+
+        // Start polling background updates
+        startPolling();
+      });
+
+      function updateYearButtons(year) {
+        const btn2025 = document.getElementById("btn-2025");
+        const btn2026 = document.getElementById("btn-2026");
+
+        if (!btn2025 || !btn2026) return;
+
+        // Reset classes
+        const activeClasses = ["bg-blue-600", "text-white", "shadow-sm"];
+        const inactiveClasses = [
+          "text-gray-400",
+          "hover:text-white",
+          "hover:bg-gray-700",
+        ];
+
+        // Clear styles first
+        btn2025.classList.remove(...activeClasses);
+        btn2026.classList.remove(...activeClasses);
+
+        btn2025.classList.add(...inactiveClasses);
+        btn2026.classList.add(...inactiveClasses);
+
+        if (year == "2025") {
+          btn2025.classList.add(...activeClasses);
+          btn2025.classList.remove(...inactiveClasses);
+        } else {
+          btn2026.classList.add(...activeClasses);
+          btn2026.classList.remove(...inactiveClasses);
+        }
+      }
+
+      function changeYear(year) {
+        if (year == currentYear) return;
+        currentYear = year;
+        updateYearButtons(year);
+
+        // Show loaders Only for Chart
+        document
+          .getElementById("chart-canvas-container")
+          .classList.add("opacity-50");
+
+        // Update only Chart
+        pollAnnualChart();
+        // pollSummaryTable(); // Disabled for year switch as Table is now independent
+
+        // Filter Table Columns
+        filterTableByYear(year);
+      }
+
+      function filterTableByYear(year) {
+        // Get all headers and rows
+        // Note: We need to target both headers and data cells in the main table content
+        // But the table content is dynamically loaded via AJAX in 'summary_table.html'
+        // So we need to apply this filter after loading OR apply it via CSS classes if possible.
+        // A simpler approach for dynamic content is to query selectors.
+
+        const table = document.querySelector("#table-content-container table");
+        if (!table) return;
+
+        const yearShort = year.substring(2); // "25" or "26"
+        const otherYearShort = year === "2025" ? "26" : "25";
+
+        // We assume columns have names like "Jan-25_solicitudes" or are translated to "Enero 2025 - Total"
+        // The 'raw_columns' are available in the template but processed into HTML.
+        // Let's rely on the text content of the headers for simplicity if classes aren't specific enough.
+
+        // Better approach: Iterate columns by index since we can find the year in the header text
+        const headers = table.querySelectorAll("thead th");
+        const rows = table.querySelectorAll("tbody tr");
+
+        headers.forEach((th, index) => {
+          // Skip "Día" column (usually index 0)
+          if (index === 0) return;
+
+          const text = th.innerText;
+          if (text.includes(year)) {
+            th.style.display = "";
+          } else if (text.includes(year === "2025" ? "2026" : "2025")) {
+            th.style.display = "none";
+          }
+        });
+
+        rows.forEach((row) => {
+          const cells = row.querySelectorAll("td");
+          cells.forEach((td, index) => {
+            if (index === 0) return; // Skip Day
+
+            // Match visibility with header
+            if (headers[index].style.display === "none") {
+              td.style.display = "none";
+            } else {
+              td.style.display = "";
+            }
+          });
+        });
+      }
 
       let chartInstance = null;
       let monthlyDetailsPreloaded = JSON.parse(
@@ -629,6 +773,9 @@
             const overlay = document.getElementById("table-loading-overlay");
             if (overlay) overlay.remove();
 
+            // Re-apply filter after updating table content
+            filterTableByYear(currentYear);
+
             return true; // Done
           }
         } catch (e) {
@@ -639,20 +786,26 @@
 
       async function pollAnnualChart() {
         try {
-          const res = await fetch("/api/annual-chart");
+          const res = await fetch(`/api/annual-chart?year=${currentYear}`);
           const data = await res.json();
 
           if (data.status === "ready") {
             // Initialize Chart
             initChart(data.chart_data);
 
-            // Update Total with Animation
-            animateValue(
-              document.getElementById("annual-total"),
-              0,
-              data.total_anual,
-              1500
-            );
+            // Update Totals with Animation
+            if (document.getElementById("total-2026")) {
+              animateValue(
+                document.getElementById("total-2026"),
+                0,
+                data.total_2026,
+                1500
+              );
+            }
+            if (document.getElementById("total-2025")) {
+              document.getElementById("total-2025").innerText =
+                new Intl.NumberFormat("es-ES").format(data.total_2025);
+            }
 
             // Update Secondary Metrics
             if (document.getElementById("monthly-average")) {
